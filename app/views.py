@@ -4,8 +4,8 @@ from django.shortcuts import render
 from rest_framework import viewsets
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
-from .models import Article, Edition, Contributor, User
-from .serializers import ArticleSerializer, EditionSerializer, ContributorSerializer, RegisterSerializer
+from .models import Article, Edition, Contributor, User, PDFRequest, EditionRequest
+from .serializers import ArticleSerializer, EditionSerializer, ContributorSerializer, RegisterSerializer, PDFRequestSerializer, EditionRequestSerializer
 from rest_framework.response import Response
 from django.http import HttpResponse
 from rest_framework import status
@@ -14,6 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.pdfgen import canvas
 from io import BytesIO
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
 
 
 from django.contrib.auth import authenticate, login
@@ -223,14 +224,81 @@ class ContributorViewSet(viewsets.ModelViewSet):
 #         return lines
 
 
+# class ArticleViewSet(viewsets.ModelViewSet):
+#     queryset = Article.objects.all()
+#     serializer_class = ArticleSerializer
+#     permission_classes = [IsAuthenticatedOrReadOnly]
+
+#     def perform_create(self, serializer):
+#         # Automatically associate the logged-in user as the contributor
+#         serializer.save(contributor=self.request.user.contributor)
+
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib.sites.shortcuts import get_current_site
+
 class ArticleViewSet(viewsets.ModelViewSet):
     queryset = Article.objects.all()
     serializer_class = ArticleSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    # permission_classes = [IsAuthenticatedOrReadOnly]
+    filter_backends = [SearchFilter]
+    # search_fields = ['title', 'content', 'contributor__name']
+    search_fields = [
+        'title', 
+        'content', 
+        'contributor__name',  # Search by contributor name
+        'industry',           # Search by industry
+        'edition__name'       # Search by edition name
+    ]
 
     def perform_create(self, serializer):
-        # Automatically associate the logged-in user as the contributor
         serializer.save(contributor=self.request.user.contributor)
+
+    @action(detail=True, methods=['post'])
+    def request_pdf(self, request, pk=None):
+        article = self.get_object()  # Get the article instance
+        serializer = PDFRequestSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Save the PDF request form data
+            pdf_request = serializer.save(article=article)
+            
+            # Send PDF via email
+            pdf_file_url = article.pdf_file.url
+            # Get the domain dynamically
+            current_site = get_current_site(request)  # 'request' is the HttpRequest object
+            domain = current_site.domain  # Get the domain name (example: example.com)
+
+            # Build the full PDF URL with http/https scheme based on the request
+            scheme = request.scheme  # 'http' or 'https' based on the request
+            full_pdf_url = f"{scheme}://{domain}{pdf_file_url}"
+            subject = f"Your requested PDF: {article.title}"
+             # Prepare the email subject and message
+            subject = f"Your requested PDF: {article.title}"
+            # message = f"""
+            # <html>
+            #     <body>
+            #         <p>Hello {pdf_request.name},</p>
+            #         <p>Thank you for requesting the PDF for the article <strong>'{article.title}'</strong>.</p>
+            #         <p>You can download it using the link below:</p>
+            #         <p><a href="{full_pdf_url}">Download PDF</a></p>
+            #         <p>Best regards,<br>Your Article Team</p>
+            #     </body>
+            # </html>
+            # """
+            
+            message = f"Hello {pdf_request.name},\n\nThank you for requesting the PDF for the article '{article.title}'. You can download it using the link below:\n\n{full_pdf_url}\n\nBest regards,\nBPPR Team"
+            recipient_list = [pdf_request.email]
+            # recipient_list = [pdf_request.email]
+            
+            try:
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list)
+                return Response({'message': 'PDF request submitted successfully. You will receive the PDF via email.'}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
     
 ## Working
@@ -276,32 +344,101 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
 import os
 from zipfile import ZipFile
+# class EditionViewSet(viewsets.ModelViewSet):
+#     queryset = Edition.objects.all()
+#     serializer_class = EditionSerializer
+
+#     @action(detail=True, methods=['get'])
+#     def download_articles(self, request, pk=None):
+#         # Get the edition and its related articles
+#         edition = self.get_object()
+#         articles = edition.articles.all()  # Related name for the foreign key
+
+#         # Create a zip file in memory
+#         buffer = BytesIO()
+#         with ZipFile(buffer, 'w') as zip_file:
+#             for article in articles:
+#                 if article.pdf_file:
+#                     # Add each article's PDF file to the zip
+#                     file_path = article.pdf_file.path
+#                     file_name = os.path.basename(file_path)
+#                     zip_file.write(file_path, f"{edition.name}/{file_name}")
+
+#         buffer.seek(0)
+
+#         # Return the zip file as a downloadable response
+#         response = HttpResponse(buffer, content_type='application/zip')
+#         response['Content-Disposition'] = f'attachment; filename="edition_{edition.id}_articles.zip"'
+#         return response
+
+#     @action(detail=True, methods=['get'])
+#     def articles(self, request, pk=None):
+#         """
+#         Retrieve all articles related to a specific edition.
+#         """
+#         edition = self.get_object()
+#         articles = edition.articles.all()  # Assuming the related name is `articles`
+#         # serializer = ArticleSerializer(articles, many=True)
+#         serializer = ArticleSerializer(articles, many=True, context={'request': request})
+#         return Response(serializer.data)
+#         # return Response(serializer.data)
+
+#     @action(detail=True, methods=['post'])
+#     def request_edition(self, request, pk=None):
+#         edition = self.get_object()  # Get the article instance
+#         serializer = EditionRequestSerializer(data=request.data)
+        
+#         if serializer.is_valid():
+#             # Save the PDF request form data
+#             edition_request = serializer.save(edition=edition)
+            
+#             # Send PDF via email
+#             edition_file_url = edition.pdf_file.url
+#             # Get the domain dynamically
+#             current_site = get_current_site(request)  # 'request' is the HttpRequest object
+#             domain = current_site.domain  # Get the domain name (example: example.com)
+
+#             # Build the full PDF URL with http/https scheme based on the request
+#             scheme = request.scheme  # 'http' or 'https' based on the request
+#             full_pdf_url = f"{scheme}://{domain}{edition_file_url}"
+#             subject = f"Your requested PDF: {edition.name}"
+#              # Prepare the email subject and message
+#             subject = f"Your requested PDF: {edition.name}"
+#             # message = f"""
+#             # <html>
+#             #     <body>
+#             #         <p>Hello {pdf_request.name},</p>
+#             #         <p>Thank you for requesting the PDF for the article <strong>'{article.title}'</strong>.</p>
+#             #         <p>You can download it using the link below:</p>
+#             #         <p><a href="{full_pdf_url}">Download PDF</a></p>
+#             #         <p>Best regards,<br>Your Article Team</p>
+#             #     </body>
+#             # </html>
+#             # """
+            
+#             message = f"Hello {edition_request.name},\n\nThank you for requesting the PDF for the Edition '{edition.name}'. You can download it using the link below:\n\n{full_pdf_url}\n\nBest regards,\nBPPR Team"
+#             recipient_list = [edition_request.email]
+#             # recipient_list = [pdf_request.email]
+            
+#             try:
+#                 send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list)
+#                 return Response({'message': 'Edition request submitted successfully. You will receive the PDF via email.'}, status=status.HTTP_200_OK)
+#             except Exception as e:
+#                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class EditionViewSet(viewsets.ModelViewSet):
     queryset = Edition.objects.all()
     serializer_class = EditionSerializer
-
-    @action(detail=True, methods=['get'])
-    def download_articles(self, request, pk=None):
-        # Get the edition and its related articles
-        edition = self.get_object()
-        articles = edition.articles.all()  # Related name for the foreign key
-
-        # Create a zip file in memory
-        buffer = BytesIO()
-        with ZipFile(buffer, 'w') as zip_file:
-            for article in articles:
-                if article.pdf_file:
-                    # Add each article's PDF file to the zip
-                    file_path = article.pdf_file.path
-                    file_name = os.path.basename(file_path)
-                    zip_file.write(file_path, f"{edition.name}/{file_name}")
-
-        buffer.seek(0)
-
-        # Return the zip file as a downloadable response
-        response = HttpResponse(buffer, content_type='application/zip')
-        response['Content-Disposition'] = f'attachment; filename="edition_{edition.id}_articles.zip"'
-        return response
+    search_fields = [
+        'name', 
+        'description', 
+        'articles__title',  # Search articles within editions
+        'articles__contributor__name',  # Search by contributor in articles
+        'articles__industry',  # Search by industry in articles
+    ]
 
     @action(detail=True, methods=['get'])
     def articles(self, request, pk=None):
@@ -314,3 +451,31 @@ class EditionViewSet(viewsets.ModelViewSet):
         serializer = ArticleSerializer(articles, many=True, context={'request': request})
         return Response(serializer.data)
         # return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='request_pdf')
+    def request_pdf(self, request, pk=None):
+        edition = self.get_object()  # Get the edition instance by ID
+        serializer = EditionRequestSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Save the PDF request data
+            edition_request = serializer.save(edition=edition)
+            
+            # Send the PDF via email
+            edition_file_url = edition.pdf_file.url  # Assuming the edition has a `pdf_file` field
+            current_site = get_current_site(request)
+            domain = current_site.domain
+            scheme = request.scheme
+            full_pdf_url = f"{scheme}://{domain}{edition_file_url}"
+
+            subject = f"Your requested PDF: {edition.name}"
+            message = f"Hello {edition_request.name},\n\nThank you for requesting the PDF for the Edition '{edition.name}'. You can download it using the link below:\n\n{full_pdf_url}\n\nBest regards,\nYour Team"
+            recipient_list = [edition_request.email]
+
+            try:
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list)
+                return Response({'message': 'Edition request submitted successfully. You will receive the PDF via email.'}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

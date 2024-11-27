@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'ckeditor',
     'app.apps.AppConfig'
 ]
 
@@ -177,3 +178,39 @@ CORS_ALLOW_METHODS = [
     'DELETE',
     'OPTIONS',
 ]
+
+
+
+CKEDITOR_CONFIGS = {
+    'default': {
+        'toolbar': 'Full',
+        'width': '100%',
+        'height': 300,
+        'extraPlugins': 'codesnippet',  # To ensure source code is visible and editable
+        'toolbarGroups': [
+            {"name": "clipboard", "groups": ["clipboard", "undo"]},
+            {"name": "editing", "groups": ["find", "selection", "spellchecker"]},
+            {"name": "forms", "groups": ["forms"]},
+            {"name": "basicstyles", "groups": ["basicstyles", "cleanup"]},
+            {"name": "paragraph", "groups": ["list", "indent", "blocks", "align"]},
+            {"name": "links", "groups": ["links"]},
+            {"name": "insert", "groups": ["insert"]},
+            {"name": "styles", "groups": ["styles"]},
+            {"name": "colors", "groups": ["colors"]},
+            {"name": "tools", "groups": ["tools"]},
+            {"name": "others", "groups": ["others"]},
+            {"name": "about", "groups": ["about"]},
+        ],
+    }
+}
+
+
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'davidomisakin4good@gmail.com'
+EMAIL_HOST_PASSWORD = 'uhzt jqrv mihk vxte'
+DEFAULT_FROM_EMAIL = 'davidomisakin4good@gmail.com'

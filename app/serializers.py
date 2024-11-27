@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Article, Edition, Contributor, User
+from .models import Article, Edition, Contributor, User, PDFRequest, EditionRequest
 
 
 
@@ -93,12 +93,13 @@ class ArticleSerializer(serializers.ModelSerializer):
     pdf_url = serializers.SerializerMethodField()
     # Include the Contributor details in the Article serializer
     contributor = ContributorSerializer()
+    industry_display = serializers.CharField(source='get_industry_display', read_only=True)
 
     class Meta:
         model = Article
         fields = [
             'id', 'title', 'content', 'image', 'contributor', 
-            'edition', 'publication_date', 'pdf_file', 'pdf_url'
+            'edition', 'publication_date', 'pdf_file', 'pdf_url', 'industry', 'industry_display'
         ]
         read_only_fields = ['contributor']
 
@@ -107,4 +108,14 @@ class ArticleSerializer(serializers.ModelSerializer):
         if obj.pdf_file:
             return request.build_absolute_uri(obj.pdf_file.url)
         return None
+
+class PDFRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PDFRequest
+        fields = ['name', 'email', 'phone_number', 'company', 'job_title']
+
+class EditionRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EditionRequest
+        fields = ['name', 'email', 'phone_number', 'company', 'job_title']
 

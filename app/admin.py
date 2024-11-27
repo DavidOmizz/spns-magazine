@@ -14,8 +14,12 @@ class ContributorAdmin(admin.ModelAdmin):
 
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    list_display = ('title', 'contributor', 'edition')
+    list_display = ('title', 'contributor', 'edition', 'industry')
 
 @admin.register(Edition)
 class EditionAdmin(admin.ModelAdmin):
     list_display = ('name', 'release_date',)
+
+@admin.register(PDFRequest)
+class PDFRequestAdmin(admin.ModelAdmin):
+    list_display = ('name', 'email', 'requested_at')
